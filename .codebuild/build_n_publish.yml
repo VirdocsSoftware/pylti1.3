@@ -1,0 +1,37 @@
+version: 0.2
+
+env:
+  shell: /bin/bash
+  secrets-manager:
+    ARTIFACTORY_EMAIL: "prod/codebuild/jfrog:ARTIFACTORY_EMAIL"
+    ARTIFACTORY_ENCRYPTED_PASS: "prod/codebuild/jfrog:ARTIFACTORY_ENCRYPTED_PASS"
+
+phases:
+  install:
+    on-failure: ABORT
+    commands:
+      - find .codebuild -type f -iname "*.sh" -exec chmod +x {} \;
+      - ./.codebuild/scripts/install.sh
+
+  pre_build:
+    on-failure: ABORT
+    commands:
+      - echo "adding jfrog config"
+      - jfrog config add ${JFROG_SERVER_ID} --artifactory-url ${ARTIFACTORY_URL} --user ${ARTIFACTORY_EMAIL} --apikey ${ARTIFACTORY_ENCRYPTED_PASS} --interactive=false
+      - jfrog config use ${JFROG_SERVER_ID}
+      - jfrog rt ping
+      
+  build:
+    on-failure: ABORT
+    commands:
+      - echo Build started on `date`
+      - echo Building the python package.
+      - python3 -m build
+
+  post_build:
+    on-failure: ABORT
+    commands:
+      - echo publishing artifacts on `date`
+      - echo publishing the python package.
+      - jfrog rt u "./dist/*" "${JFROG_PYTHON_REPO}"/
+      - echo Successfully published ${PACKAGE_NAME}
